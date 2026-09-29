@@ -34,8 +34,8 @@ string recortar(string s) {
 
 
 int main(int argc, char *argv[]) {
-    if (argc != 3) {
-        cout << "uso: " << argv[0] << " plan.txt K" << endl;
+        if (argc < 3 || argc > 4) {
+                cout << "uso: " << argv[0] << " plan.txt K [prob_falla]" << endl;
     return 1;
     }
             srand(time(NULL));   // variador de semilla
@@ -44,6 +44,8 @@ int main(int argc, char *argv[]) {
                 cout << "K tiene que ser mayor a 0" << endl;
                 return 1;
             }
+                int prob_falla = 0;   // % de que falle 
+                    if (argc == 4) prob_falla = atoi(argv[3]);
             ifstream archivo(argv[1]);
         if (!archivo) {
                 cout << "no se pudo abrir " << argv[1] << endl;
@@ -148,6 +150,8 @@ int main(int argc, char *argv[]) {
     map<int, int> vivos;   // pid -> actividad
     int hechas = 0;
 
+        vector<bool> cancelada(actividades.size(), false);
+
     while (hechas < (int)actividades.size()) {
         while ((int)vivos.size() < K && !cola.empty()) {
             int i = cola.front();
@@ -178,6 +182,10 @@ int main(int argc, char *argv[]) {
                 close(ida[0]);
 
                 usleep(actividades[i].tiempo * 1000);
+                
+                // falla a proposito pa probar
+                srand(getpid());
+                if (rand() % 100 < prob_falla) exit(1);
 
                 memset(msg, 0, 128);
                 snprintf(msg, 128, "%s listo", actividades[i].nombre.c_str());
@@ -213,13 +221,32 @@ int main(int argc, char *argv[]) {
         close(actividades[i].fd);
         actividades[i].mensaje = msg;
 
-        vivos.erase(pid);
+                vivos.erase(pid);
         hechas++;
-        cout << "termina " << actividades[i].nombre << endl;
 
-        for (int h : actividades[i].hijos) {
-            faltan[h]--;
-            if (faltan[h] == 0) cola.push(h);
+        if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+            cout << "termina " << actividades[i].nombre << endl;
+            for (int h : actividades[i].hijos) {
+                faltan[h]--;
+                if (faltan[h] == 0) cola.push(h);
+            }
+        } else {
+            cout << "FALLO " << actividades[i].nombre << endl;
+            // cancelo todo lo que dependia de esta, directo o indirecto
+            queue<int> q;
+            q.push(i);
+            while (!q.empty()) {
+                int x = q.front();
+                q.pop();
+                for (int h : actividades[x].hijos) {
+                    if (!cancelada[h]) {
+                        cancelada[h] = true;
+                        hechas++;
+                        cout << "   se cancela " << actividades[h].nombre << endl;
+                        q.push(h);
+                    }
+                }
+            }
         }
     }
     cout << "fin" << endl;

@@ -7,6 +7,7 @@ make
 
 ## Ejecutar
 ./planificador plan.txt K
+./planificador plan.txt K [prob_falla]
 
 ## Avance
 - lee plan.text y separa cada linea en id nombre tiempo y dependencias.
@@ -17,3 +18,4 @@ make
 - detecta ciclos antes de ejecutar
 - recortar tambien quita los /r.
 - cada actividad corre en un proceso hijo, el hijo duerme su tiempo con usleep. el padre espera con waitpid y nunca hay mas de K procesos al mismo tiempo.
+- fallas: con un tercer argumento opcional 0 a 100
