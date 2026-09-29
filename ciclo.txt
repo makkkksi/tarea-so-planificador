@@ -1,0 +1,3 @@
+1 : prender_carbon : 500 : 3
+2 : comprar_carne : 1200 : 1
+3 : asar : 800 : 2

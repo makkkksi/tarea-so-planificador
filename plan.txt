@@ -4,4 +4,4 @@
 4 : asar_longaniza : 800 : 1, 2
 5 : armar_choripan : 250 : 3, 4
 6 : servir_mesa : 100 : 5
-7 : texto_dejemplo
+7 : bailar_cueca : : 6
