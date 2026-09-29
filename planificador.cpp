@@ -11,6 +11,7 @@
 #include <sys/wait.h>
 #include <cstring>
 #include <cstdio>
+#include <csignal>
 using namespace std;
 
 //agrupador por variables
@@ -31,7 +32,12 @@ string recortar(string s) {
        size_t fin = s.find_last_not_of(" \t\r\n"); //ooh q me costover el error
     return s.substr(ini, fin - ini + 1);
 }
+  
+volatile sig_atomic_t seremi = 0;
 
+void ctrl_c(int) {
+    seremi = 1;   // aca solo marco, lo demas lo hace el main
+}
 
 int main(int argc, char *argv[]) {
         if (argc < 3 || argc > 4) {
@@ -151,9 +157,13 @@ int main(int argc, char *argv[]) {
     int hechas = 0;
 
         vector<bool> cancelada(actividades.size(), false);
-
-    while (hechas < (int)actividades.size()) {
-        while ((int)vivos.size() < K && !cola.empty()) {
+            
+                struct sigaction sa;
+                memset(&sa, 0, sizeof(sa));
+                sa.sa_handler = ctrl_c;
+                sigaction(SIGINT, &sa, NULL);
+        while (hechas < (int)actividades.size() && !seremi) {
+                while ((int)vivos.size() < K && !cola.empty() && !seremi) {
             int i = cola.front();
             cola.pop();
 
@@ -212,6 +222,11 @@ int main(int argc, char *argv[]) {
 
         int status;
         int pid = waitpid(-1, &status, 0);
+                if (seremi) {
+            if (pid > 0) vivos.erase(pid);
+            break;
+        }
+        if (pid < 0) continue;
         int i = vivos[pid];
         
         // leo lo que mando el hijo antes de morir
@@ -248,6 +263,12 @@ int main(int argc, char *argv[]) {
                 }
             }
         }
+    }
+    
+    if (seremi) {
+        cout << "llego la seremi, se aborta todo" << endl;
+        for (auto &v : vivos) kill(v.first, SIGTERM);   // mato a los que siguen vivos
+        while (wait(NULL) > 0) {}   // los espero a todos pa que no queden zombies
     }
     cout << "fin" << endl;
     return 0;
