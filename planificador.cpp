@@ -9,6 +9,8 @@
 #include <queue>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <cstring>
+#include <cstdio>
 using namespace std;
 
 //agrupador por variables
@@ -18,7 +20,9 @@ struct Actividad {
     int tiempo;            
     string deps_texto;     
     vector<int> deps;      
-    vector<int> hijos;     
+    vector<int> hijos;  
+        string mensaje;   // lo que mando al terminar
+    int fd;           // por donde el padre lee su mensaje   
 };
 // funcion parecortar
 string recortar(string s) {
@@ -149,15 +153,51 @@ int main(int argc, char *argv[]) {
             int i = cola.front();
             cola.pop();
 
+                    int ida[2];      // padre -> hijo
+            int vuelta[2];   // hijo -> padre
+            if (pipe(ida) < 0 || pipe(vuelta) < 0) {
+                cout << "error en pipe" << endl;
+                return 1;
+            }
+
             int pid = fork();
             if (pid < 0) {
                 cout << "error en fork" << endl;
                 return 1;
             }
             if (pid == 0) {
+                close(ida[1]);
+                close(vuelta[0]);
+                // los pipes de los otros hijos no me sirven
+                for (auto &v : vivos) close(actividades[v.second].fd);
+
+                char msg[128];
+                while (read(ida[0], msg, 128) == 128) {
+                    cout << "   " << actividades[i].nombre << " recibe: " << msg << endl;
+                }
+                close(ida[0]);
+
                 usleep(actividades[i].tiempo * 1000);
+
+                memset(msg, 0, 128);
+                snprintf(msg, 128, "%s listo", actividades[i].nombre.c_str());
+                write(vuelta[1], msg, 128);
+                close(vuelta[1]);
                 exit(0);
             }
+            close(ida[0]);
+            close(vuelta[1]);
+
+            // le paso al hijo lo que dejaron sus dependencias
+            for (int d : actividades[i].deps) {
+                char msg[128];
+                memset(msg, 0, 128);
+                strncpy(msg, actividades[d].mensaje.c_str(), 127);
+                write(ida[1], msg, 128);
+            }
+            close(ida[1]);   // si no lo cierro el hijo se queda esperando en el read
+
+            actividades[i].fd = vuelta[0];
             vivos[pid] = i;
             cout << "empieza " << actividades[i].nombre << " (" << vivos.size() << " corriendo)" << endl;
         }
@@ -165,6 +205,14 @@ int main(int argc, char *argv[]) {
         int status;
         int pid = waitpid(-1, &status, 0);
         int i = vivos[pid];
+        
+        // leo lo que mando el hijo antes de morir
+        char msg[128];
+        memset(msg, 0, 128);
+        read(actividades[i].fd, msg, 128);
+        close(actividades[i].fd);
+        actividades[i].mensaje = msg;
+
         vivos.erase(pid);
         hechas++;
         cout << "termina " << actividades[i].nombre << endl;
