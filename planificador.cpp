@@ -7,6 +7,8 @@
 #include <map>
 #include <sstream>
 #include <queue>
+#include <unistd.h>
+#include <sys/wait.h>
 using namespace std;
 
 //agrupador por variables
@@ -33,7 +35,11 @@ int main(int argc, char *argv[]) {
     return 1;
     }
             srand(time(NULL));   // variador de semilla
-
+                int K = atoi(argv[2]);
+            if (K < 1) {
+                cout << "K tiene que ser mayor a 0" << endl;
+                return 1;
+            }
             ifstream archivo(argv[1]);
         if (!archivo) {
                 cout << "no se pudo abrir " << argv[1] << endl;
@@ -129,13 +135,45 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-            for (int i = 0; i < (int)actividades.size(); i++) {
-        cout << actividades[i].id << " " << actividades[i].nombre << " " << actividades[i].tiempo << " ms";
-        cout << "  depende de:";
-        for (int j : actividades[i].deps) cout << " " << actividades[j].id;
-        cout << "  la necesitan:";
-        for (int h : actividades[i].hijos) cout << " " << actividades[h].id;
-        cout << endl;
+             // ahora si, a ejecutar
+    for (int i = 0; i < (int)actividades.size(); i++) {
+        faltan[i] = actividades[i].deps.size();
+        if (faltan[i] == 0) cola.push(i);
     }
+
+    map<int, int> vivos;   // pid -> actividad
+    int hechas = 0;
+
+    while (hechas < (int)actividades.size()) {
+        while ((int)vivos.size() < K && !cola.empty()) {
+            int i = cola.front();
+            cola.pop();
+
+            int pid = fork();
+            if (pid < 0) {
+                cout << "error en fork" << endl;
+                return 1;
+            }
+            if (pid == 0) {
+                usleep(actividades[i].tiempo * 1000);
+                exit(0);
+            }
+            vivos[pid] = i;
+            cout << "empieza " << actividades[i].nombre << " (" << vivos.size() << " corriendo)" << endl;
+        }
+
+        int status;
+        int pid = waitpid(-1, &status, 0);
+        int i = vivos[pid];
+        vivos.erase(pid);
+        hechas++;
+        cout << "termina " << actividades[i].nombre << endl;
+
+        for (int h : actividades[i].hijos) {
+            faltan[h]--;
+            if (faltan[h] == 0) cola.push(h);
+        }
+    }
+    cout << "fin" << endl;
     return 0;
 }
